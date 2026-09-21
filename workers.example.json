@@ -1,0 +1,70 @@
+{
+  "version": "3.0.0",
+  "updated_at": "2026-09-21T00:00:00Z",
+  "description": "Global Worker Registry for ORCHESTRATOR V3",
+  "workers": {
+    "bubu": {
+      "worker_id": "bubu",
+      "worker_type": "context_analysis",
+      "name": "BUBU Context Worker",
+      "description": "Specialized in multi-file context analysis, architectural audits, memory leak detection, and log forensic research.",
+      "transport": "cli",
+      "entrypoint": "C:\\Tools\\BUBU\\.agents\\skills\\ai-studio-worker\\scripts\\ai_worker.py",
+      "python_executable": "python",
+      "capabilities": [
+        "context_analysis",
+        "code_audit",
+        "memory_leak_detection",
+        "multi_file_analysis",
+        "architecture_review",
+        "diff_investigation"
+      ],
+      "enabled": true,
+      "version": "1.0.0",
+      "timeout_seconds": 60,
+      "priority": 1,
+      "execution_mode": "cloud_hybrid",
+      "cost_characteristics": {
+        "token_cost_tier": "low_to_medium",
+        "requires_cloud_quota": true,
+        "quota_provider": "gemini",
+        "supports_offline_decide": true
+      }
+    },
+    "argus": {
+      "worker_id": "argus",
+      "worker_type": "vision",
+      "name": "ARGUS Vision Shield",
+      "description": "On-device vision shield and token guardian utilizing local GPU and FastMCP for desktop/emulator UI automation and perceptual circuit breaking.",
+      "transport": "mcp",
+      "entrypoint": "argus",
+      "server_path": "C:\\Tools\\ARGUS\\server.py",
+      "python_executable": "python",
+      "tools": [
+        "smart_ui_scan",
+        "smart_ui_desktop_items",
+        "smart_ui_click",
+        "smart_ui_reset"
+      ],
+      "capabilities": [
+        "screen_capture",
+        "desktop_items_listing",
+        "ui_element_detection",
+        "perceptual_hash_dedup",
+        "circuit_breaker_freeze_prevention",
+        "privacy_redaction"
+      ],
+      "enabled": true,
+      "version": "1.0.0",
+      "timeout_seconds": 30,
+      "priority": 1,
+      "execution_mode": "local_gpu",
+      "cost_characteristics": {
+        "token_cost_tier": "zero_local",
+        "requires_cloud_quota": false,
+        "quota_provider": null,
+        "supports_offline_decide": true
+      }
+    }
+  }
+}

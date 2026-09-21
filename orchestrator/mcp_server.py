@@ -199,6 +199,10 @@ def create_mcp_server():
     return mcp
 
 
-if __name__ == "__main__":
+def main():
     server = create_mcp_server()
     server.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
