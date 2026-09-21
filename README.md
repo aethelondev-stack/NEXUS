@@ -29,6 +29,7 @@
 - [MCP Tools Reference](#mcp-tools-reference)
 - [Configuration & State Management](#configuration--state-management)
 - [Verification & Smoke Tests](#verification--smoke-tests)
+- [Real Two-Worker Integration Proof](#real-two-worker-integration-proof)
 - [Troubleshooting](#troubleshooting)
 - [Security & API Key Handling](#security--api-key-handling)
 - [Cross-Platform Support](#cross-platform-support)
@@ -570,6 +571,65 @@ OVERALL RESULT: 100% PASS
 
 ---
 
+## Real Two-Worker Integration Proof
+
+ORCHESTRATOR V3 provides an automated end-to-end integration test verifying that both specialized workers—**BUBU** (Cloud LLM Context Worker) and **ARGUS** (On-device FastMCP Vision Shield)—are coordinated within a single workflow.
+
+### Automated Test Command
+```powershell
+python tests/verify_two_worker_integration.py
+```
+
+### Verification Methodology
+1. **Dynamic Test Fixture:** Generates an isolated Python fixture (`integration_payload_<hex>.py`) containing intentional security findings (arbitrary `eval()`, hardcoded token, unchecked division).
+2. **Desktop Marker Placement:** Places a temporary test marker (`0_ORCHESTRATOR_INTEGRATION_MARKER_<hex>.txt`) on the active Windows Desktop.
+3. **Phase 1 (BUBU Execution):** Dispatches code audit to BUBU via real Gemini Cloud API (`--model gemini-3.5-flash-lite`), verifying multi-line evidence and structured findings.
+4. **Phase 2 (ARGUS Execution):** Dispatches desktop inspection to ARGUS via native FastMCP JSON-RPC transport (`smart_ui_desktop_items`), discovering the desktop marker.
+5. **Cross-Correlation & Machine-Readable Artifact:** Cross-references the fixture SHA-256 and discovered marker into a sanitized machine-readable JSON artifact saved to `tests/artifacts/last_two_worker_integration.json`.
+6. **Guaranteed Cleanup & Registry Restoration:** A deterministic `try ... finally` block removes the desktop marker and test fixture, and restores `workers.json` to its pre-test configuration state.
+
+### Empirical Execution Output
+```text
+=================================================================
+ORCHESTRATOR V3: REAL TWO-WORKER INTEGRATION EXPERIMENT
+Coordinates real BUBU (Cloud LLM) + real ARGUS (Local FastMCP)
+=================================================================
+[*] Experiment ID        : exp-20260921231148-d8db9c
+[*] Desktop Marker Target: 0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt
+[*] Gemini API Credential: CONFIGURED
+[+] Global Registry: Temporarily set enabled=True for BUBU & ARGUS.
+[+] Created Fixture: integration_payload_632cc3.py (SHA-256: e96fedc1dea53c08...)
+[+] Created Desktop Marker: 0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt
+
+--- Phase 1: BUBU Real Cloud API Execution ---
+[BUBU] Status   : success (3.093s)
+[BUBU] Findings : 3
+[BUBU] Evidence : 4 items
+       (1) Arbitrary code execution via Python eval() on unsanitized user payload dictionary values....
+       (2) Hardcoded sensitive secret key within the integration fixture....
+       (3) Potential ZeroDivisionError when processing the divisor from the user payload....
+
+--- Phase 2: ARGUS Real FastMCP Desktop Discovery ---
+[ARGUS] Status       : success (2.031s)
+[ARGUS] Transport    : mcp
+[ARGUS] Desktop Items: 46
+[ARGUS] Marker Found : True (0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt)
+
+--- Phase 3: Combined Evidence Cross-Correlation ---
+[+] Saved Evidence Artifact: tests\artifacts\last_two_worker_integration.json
+
+=================================================================
+EXPERIMENT RESULT: 100% PASS (Both workers executed and cross-correlated)
+=================================================================
+
+--- Cleanup & Safety Restoration ---
+[+] Cleaned up desktop marker: 0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt
+[+] Cleaned up test fixture: integration_payload_632cc3.py
+[+] Global Registry: Successfully restored original pre-test state (disabled=false).
+```
+
+---
+
 ## Troubleshooting
 
 ### 1. MCP Server Does Not Appear in Host
@@ -683,7 +743,9 @@ ORCHESTRATOR/
     ├── test_mcp_adapter.py          # FastMCP Tool Binding Tests
     ├── test_quota_manager.py        # 429 Quota & Loop Detection Tests
     ├── test_worker_registry.py      # Registry Discovery Tests
-    └── verify_root_cause_chains.py  # Empirical 6-Chain Integration Matrix
+    ├── verify_root_cause_chains.py  # Empirical 6-Chain Integration Matrix
+    ├── verify_two_worker_integration.py # Real End-to-End BUBU + ARGUS Proof
+    └── artifacts/                   # Sanitized Machine-Readable Evidence Run Logs
 ```
 
 ---

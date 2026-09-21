@@ -98,7 +98,7 @@ class TestWorkerRegistry(unittest.TestCase):
         # Loads the actual ~/.gemini/orchestrator/workers.json
         reg = WorkerRegistry()
         if reg.registry_path.exists():
-            workers = reg.list_workers()
+            workers = reg.list_workers(enabled_only=False)
             self.assertGreaterEqual(len(workers), 2)
             bubu = reg.get_worker("bubu")
             self.assertIsNotNone(bubu)

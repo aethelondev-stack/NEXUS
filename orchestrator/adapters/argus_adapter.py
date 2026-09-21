@@ -178,8 +178,18 @@ class ArgusAdapter(BaseWorkerAdapter):
 
         # Extract findings
         findings: List[str] = []
+        target_marker = request.parameters.get("target_marker")
+        marker_found = False
         if "items" in parsed_data:
-            findings = [f"Desktop Item: {item}" for item in parsed_data["items"][:10]]
+            all_items = parsed_data.get("items", [])
+            if target_marker:
+                marker_found = any(target_marker == it or target_marker in it for it in all_items)
+                matching = [it for it in all_items if target_marker == it or target_marker in it]
+                non_matching = [it for it in all_items if not (target_marker == it or target_marker in it)]
+                sorted_items = matching + non_matching
+                findings = [f"Desktop Item: {item}" for item in sorted_items[:15]]
+            else:
+                findings = [f"Desktop Item: {item}" for item in all_items[:10]]
         elif "visible_windows" in parsed_data:
             findings = [f"Window: {w.get('title', '')}" for w in parsed_data.get("visible_windows", [])[:10]]
         elif "message" in parsed_data:
@@ -199,6 +209,8 @@ class ArgusAdapter(BaseWorkerAdapter):
                 "tool": tool_name,
                 "transport": "mcp",
                 "desktop_items_count": parsed_data.get("desktop_items_count", len(findings)),
-                "token_cost": 0
+                "token_cost": 0,
+                "target_marker": target_marker,
+                "target_marker_found": marker_found if target_marker else None
             }
         )

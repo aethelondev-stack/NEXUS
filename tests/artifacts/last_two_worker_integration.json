@@ -1,0 +1,72 @@
+{
+  "experiment_id": "exp-20260921231339-628325",
+  "timestamp": "2026-09-21T23:13:44.857163+00:00",
+  "orchestrator_version": "3.0.0",
+  "environment": {
+    "os": "Windows 11",
+    "gemini_api_configured": true,
+    "argus_transport": "mcp",
+    "bubu_transport": "cli"
+  },
+  "fixture": {
+    "name": "integration_payload_a051f3.py",
+    "sha256": "9453aadb77657f28a2b51ea5f119e6d0cc6cdbfdbff8f565601475fc0fc6d43a",
+    "desktop_marker": "0_ORCHESTRATOR_INTEGRATION_MARKER_a051f3.txt"
+  },
+  "bubu_execution": {
+    "task_id": "bubu-exp-20260921231339-628325",
+    "worker_name": "bubu",
+    "status": "success",
+    "duration_seconds": 3.07,
+    "findings_count": 3,
+    "evidence_count": 4,
+    "findings_sample": [
+      "Arbitrary code execution via the built-in eval function using unvalidated user input.",
+      "Hardcoded sensitive demo service key stored in plain text within the codebase.",
+      "Unchecked division by zero vulnerability when parsing the divisor parameter from user input."
+    ],
+    "evidence_sample": [
+      {
+        "file": "integration_payload_a051f3.py",
+        "line_start": 10,
+        "line_end": 10,
+        "finding": "Unsafe execution of user-supplied code using eval()",
+        "confidence": 1.0
+      },
+      {
+        "file": "integration_payload_a051f3.py",
+        "line_start": 13,
+        "line_end": 13,
+        "finding": "Hardcoded sensitive integration key",
+        "confidence": 1.0
+      },
+      {
+        "file": "integration_payload_a051f3.py",
+        "line_start": 16,
+        "line_end": 16,
+        "finding": "Potential division by zero with default divisor of zero",
+        "confidence": 1.0
+      }
+    ]
+  },
+  "argus_execution": {
+    "task_id": "argus-exp-20260921231339-628325",
+    "worker_name": "argus",
+    "status": "success",
+    "duration_seconds": 2.181,
+    "transport": "mcp",
+    "desktop_items_count": 46,
+    "target_marker": "0_ORCHESTRATOR_INTEGRATION_MARKER_a051f3.txt",
+    "target_marker_found": true,
+    "findings": [
+      "Desktop Item: 0_ORCHESTRATOR_INTEGRATION_MARKER_a051f3.txt"
+    ]
+  },
+  "cross_correlation": {
+    "shared_experiment_id": "exp-20260921231339-628325",
+    "bubu_analyzed_fixture_sha256": "9453aadb77657f28a2b51ea5f119e6d0cc6cdbfdbff8f565601475fc0fc6d43a",
+    "argus_discovered_desktop_marker": "0_ORCHESTRATOR_INTEGRATION_MARKER_a051f3.txt",
+    "correlation_verified": true
+  },
+  "final_status": "PASS"
+}

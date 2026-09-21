@@ -19,6 +19,8 @@ class TestWorkerAdapters(unittest.TestCase):
         self.state_dir = pathlib.Path(self.temp_dir.name)
         self.pm = ProviderManager(state_dir=self.state_dir)
         self.reg = WorkerRegistry()
+        for w in self.reg._workers.values():
+            w.enabled = True
 
     def tearDown(self):
         self.temp_dir.cleanup()
