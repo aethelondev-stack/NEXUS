@@ -109,7 +109,7 @@
 | **`orchestrator.mcp_server`** | `orchestrator/mcp_server.py` | FastMCP stdio server exposing 6 standardized tools to agent hosts. |
 | **`orchestrator.cli`** | `orchestrator/cli.py` | Standalone CLI for status inspection, classification, and test dispatch. |
 | **`orchestrator.adapters.bubu_adapter`** | `orchestrator/adapters/bubu_adapter.py` | Subprocess CLI bridge to BUBU with project root anchoring and registry API key inheritance. |
-| **`orchestrator.adapters.argus_adapter`** | `orchestrator/adapters/argus_adapter.py` | Real MCP stdio client bridge to ARGUS with direct shell fallback. |
+| **`orchestrator.adapters.argus_adapter`** | `orchestrator/adapters/argus_adapter.py` | Real MCP stdio client bridge to ARGUS with strict failure semantics. |
 
 ---
 
@@ -596,7 +596,7 @@ OVERALL RESULT: 100% PASS
 ### 4. ARGUS Child-Process Timeout (>30s)
 - **Symptom:** ARGUS dispatches time out after 30s.
 - **Cause:** Invoking heavy PyTorch/PyAutoGUI imports from within non-interactive child processes blocks on Windows.
-- **Fix:** `ArgusAdapter` connects directly to ARGUS FastMCP server via `mcp.client.stdio.stdio_client` and uses lightweight shell fallback.
+- **Fix:** `ArgusAdapter` connects directly to ARGUS FastMCP server via `mcp.client.stdio.stdio_client` with strict failure semantics (no silent fallback or fake success).
 - **Verification:** Test E runs in ~1.5s with zero token cost.
 
 ### 5. Loop Detected / Cycle Halted

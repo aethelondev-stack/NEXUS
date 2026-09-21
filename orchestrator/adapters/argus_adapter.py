@@ -140,25 +140,17 @@ class ArgusAdapter(BaseWorkerAdapter):
             except Exception as e:
                 call_error = str(e)
 
-        # 4. Resilient direct shell fallback for desktop items if MCP transport failed
+        # 4. Strict Failure Semantics: If MCP transport fails, fail cleanly without fake success
         if parsed_data is None:
-            if action in ("desktop_items", "desktop", "items"):
-                items = self._get_desktop_items_direct()
-                parsed_data = {
-                    "status": "success",
-                    "desktop_items_count": len(items),
-                    "items": [it["name"] for it in items[:25]]
-                }
-            else:
-                err_msg = call_error or "MCP transport invocation failed and no fallback available."
-                return WorkerResponse(
-                    task_id=task_id,
-                    worker_name=self.definition.worker_id,
-                    status="failed",
-                    summary=f"ARGUS execution failed: {err_msg[:200]}",
-                    error=WorkerError(error_code="EXECUTION_FAILED", message=err_msg, retryable=False),
-                    metrics={"duration_seconds": round(time.time() - start_time, 4)}
-                )
+            err_msg = call_error or "ARGUS FastMCP server failed to respond or return valid data."
+            return WorkerResponse(
+                task_id=task_id,
+                worker_name=self.definition.worker_id,
+                status="failed",
+                summary=f"ARGUS MCP execution failed: {err_msg[:200]}",
+                error=WorkerError(error_code="MCP_TRANSPORT_ERROR", message=err_msg, retryable=False),
+                metrics={"duration_seconds": round(time.time() - start_time, 4)}
+            )
 
         duration = round(time.time() - start_time, 4)
 
@@ -194,27 +186,8 @@ class ArgusAdapter(BaseWorkerAdapter):
                 "duration_seconds": duration,
                 "action": action,
                 "tool": tool_name,
-                "transport": "mcp" if mcp_transport_used else "fallback",
+                "transport": "mcp",
                 "desktop_items_count": parsed_data.get("desktop_items_count", len(findings)),
                 "token_cost": 0
             }
         )
-
-    @staticmethod
-    def _get_desktop_items_direct() -> List[Dict[str, str]]:
-        items = []
-        for folder in [os.path.expanduser('~/Desktop'), r'C:\Users\Public\Desktop']:
-            if os.path.exists(folder):
-                try:
-                    for fname in os.listdir(folder):
-                        fpath = os.path.join(folder, fname)
-                        is_link = fname.lower().endswith(('.lnk', '.url'))
-                        items.append({
-                            "name": fname.replace('.lnk', '').replace('.url', ''),
-                            "filename": fname,
-                            "path": fpath,
-                            "type": "shortcut" if is_link else "file"
-                        })
-                except Exception:
-                    pass
-        return items
