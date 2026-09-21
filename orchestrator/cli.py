@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--task-type", type=str, default="ANALYZE", help="Task type override for dispatch")
     parser.add_argument("--dry-run", action="store_true", help="Run dispatch in dry-run/decide mode")
     parser.add_argument("--action", type=str, help="Sub-action parameter for workers (e.g. desktop_items, scan)")
+    parser.add_argument("--worker", type=str, help="Explicit target worker (e.g. bubu, argus)")
     parser.add_argument("--simulate-error", choices=["rate_limit", "quota_exhausted", "503", "auth_failed"], help="Simulate a provider error")
     parser.add_argument("--simulate-success", action="store_true", help="Simulate a successful provider request")
     parser.add_argument("--reset-state", action="store_true", help="Reset local provider state (Testing only)")
@@ -59,12 +60,21 @@ def main():
         sys.exit(0)
 
     if args.dispatch:
+        params = {}
+        if args.dry_run:
+            params["dry_run"] = True
+        if args.action:
+            params["action"] = args.action
+        if args.worker:
+            params["worker"] = args.worker
+            params["target_worker"] = args.worker
+
         req = WorkerRequest(
             task_id=f"cli-{uuid.uuid4().hex[:8]}",
             task_type=args.task_type,
             prompt=args.dispatch,
             files=args.files,
-            parameters={"dry_run": args.dry_run, "action": args.action} if (args.dry_run or args.action) else {}
+            parameters=params
         )
         resp = orch.execute_task(req)
         print(json.dumps(resp.to_dict(), indent=2, ensure_ascii=False))

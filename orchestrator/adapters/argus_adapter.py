@@ -34,6 +34,17 @@ class ArgusAdapter(BaseWorkerAdapter):
         if not self.definition.enabled:
             return False, "ARGUS worker is disabled in registry."
 
+        # Project-level preference check
+        a_cfg = self.project_root / ".argus" / "config.json"
+        if a_cfg.is_file():
+            try:
+                with open(a_cfg, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("mode") == "direct" or data.get("argus_mode") == "direct":
+                    return False, "ARGUS worker is set to 'direct' mode in project configuration (.argus/config.json)."
+            except Exception:
+                pass
+
         server_p = pathlib.Path(self.definition.server_path or "")
         if server_p.exists():
             return True, "ARGUS FastMCP server is available."

@@ -26,6 +26,17 @@ class BubuAdapter(BaseWorkerAdapter):
         if not self.definition.enabled:
             return False, "BUBU worker is disabled in registry."
 
+        # Project-level preference check
+        b_cfg = self.project_root / ".ai-worker" / "config.json"
+        if b_cfg.is_file():
+            try:
+                with open(b_cfg, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("worker_mode") == "disabled" or data.get("mode") == "disabled":
+                    return False, "BUBU worker is disabled in project configuration (.ai-worker/config.json)."
+            except Exception:
+                pass
+
         ep = pathlib.Path(self.definition.entrypoint)
         if not ep.exists():
             return False, f"BUBU entrypoint not found at: {ep}"

@@ -167,24 +167,122 @@ class Orchestrator:
         self._action_history.clear()
         self._fingerprint_counts.clear()
 
+    def is_worker_enabled(self, worker_name: str, target_dir: Optional[pathlib.Path] = None) -> bool:
+        """
+        Determines whether a worker is enabled.
+        Authoritative source: Global Worker Registry (workers.json).
+        Workspace policy: Checks project-level config if present in project_root or target_dir.
+        """
+        norm_id = "bubu" if worker_name in ("bubu", "ai-studio-worker") else worker_name
+
+        # 1. Authoritative global registry check
+        if not self.registry.is_worker_enabled(norm_id):
+            return False
+
+        # 2. Local workspace configuration override
+        root = target_dir or self.project_root
+        if norm_id == "bubu":
+            bubu_cfg = root / ".ai-worker" / "config.json"
+            if bubu_cfg.is_file():
+                try:
+                    with open(bubu_cfg, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("worker_mode") == "disabled" or data.get("mode") == "disabled":
+                        return False
+                except Exception:
+                    pass
+        elif norm_id == "argus":
+            argus_cfg = root / ".argus" / "config.json"
+            if argus_cfg.is_file():
+                try:
+                    with open(argus_cfg, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("mode") == "direct" or data.get("argus_mode") == "direct":
+                        return False
+                except Exception:
+                    pass
+
+        return True
+
     # -----------------------------------------------------------------------
     # Core Pipeline: PLAN -> EXECUTE -> OBSERVE -> VERIFY -> DONE
     # -----------------------------------------------------------------------
     def execute_task(self, request: WorkerRequest) -> WorkerResponse:
         start_time = time.time()
         task_id = request.task_id
-        classification = self.classify_task(request.prompt, request.files, request.parameters)
 
-        # 1. Direct Path First (Phase 1.1)
-        if classification == TaskClassification.DIRECT:
-            return WorkerResponse(
-                task_id=task_id,
-                worker_name="main_agent_direct",
-                status="direct",
-                summary="Direct Path First: Task is localized. Execution delegated directly to Lead Agent.",
-                findings=["Direct execution bypasses worker overhead."],
-                metrics={"duration_seconds": round(time.time() - start_time, 4), "routing": "DIRECT"}
-            )
+        # Determine target directory from request files if available
+        req_dir = None
+        if request.files:
+            try:
+                first_f = pathlib.Path(request.files[0])
+                if first_f.is_absolute():
+                    curr = first_f.parent
+                    for p in [curr] + list(curr.parents):
+                        if (p / ".ai-worker").is_dir() or (p / ".argus").is_dir() or (p / ".git").is_dir():
+                            req_dir = p
+                            break
+            except Exception:
+                pass
+
+        # Check for explicit worker target
+        explicit_worker = request.parameters.get("worker") or request.parameters.get("target_worker")
+
+        if explicit_worker:
+            # -------------------------------------------------------------------
+            # EXPLICIT DISPATCH PATH
+            # -------------------------------------------------------------------
+            norm_explicit = "ai-studio-worker" if explicit_worker == "bubu" else explicit_worker
+            if not self.is_worker_enabled(explicit_worker, target_dir=req_dir):
+                return WorkerResponse(
+                    task_id=task_id,
+                    worker_name=explicit_worker,
+                    status="not_available",
+                    summary=f"Explicitly requested worker '{explicit_worker}' is disabled in configuration.",
+                    error=WorkerError(
+                        error_code="WORKER_NOT_AVAILABLE",
+                        message=f"Worker '{explicit_worker}' is disabled and cannot be dispatched.",
+                        retryable=False
+                    ),
+                    metrics={"duration_seconds": round(time.time() - start_time, 4), "explicit_dispatch": True}
+                )
+            worker_name = norm_explicit
+            classification = self.classify_task(request.prompt, request.files, request.parameters)
+        else:
+            # -------------------------------------------------------------------
+            # AUTOMATIC ROUTING PATH
+            # -------------------------------------------------------------------
+            classification = self.classify_task(request.prompt, request.files, request.parameters)
+
+            # 1. Direct Path First (Phase 1.1)
+            if classification == TaskClassification.DIRECT:
+                return WorkerResponse(
+                    task_id=task_id,
+                    worker_name="main_agent_direct",
+                    status="direct",
+                    summary="Direct Path First: Task is localized. Execution delegated directly to Lead Agent.",
+                    findings=["Direct execution bypasses worker overhead."],
+                    metrics={"duration_seconds": round(time.time() - start_time, 4), "routing": "DIRECT"}
+                )
+
+            # Candidate worker based on classification
+            worker_name = "ai-studio-worker" if classification == TaskClassification.CONTEXT_ANALYSIS else ("argus" if classification == TaskClassification.VISION else "composite")
+
+            # Check if candidate worker is disabled -> Fallback to Direct Path
+            if not self.is_worker_enabled(worker_name, target_dir=req_dir):
+                return WorkerResponse(
+                    task_id=task_id,
+                    worker_name="main_agent_direct",
+                    status="direct",
+                    summary=f"Worker '{worker_name}' is disabled in configuration. Fallback to Direct Path: Task delegated directly to Lead Agent.",
+                    findings=[f"Target worker '{worker_name}' is disabled in configuration. Execution delegated to Lead Agent without worker overhead."],
+                    metrics={
+                        "duration_seconds": round(time.time() - start_time, 4),
+                        "routing": "DIRECT_FALLBACK",
+                        "disabled_worker": worker_name,
+                        "classification": classification.value
+                    }
+                )
 
         # 2. Fingerprint check
         fp = request.compute_fingerprint()
@@ -222,9 +320,6 @@ class Orchestrator:
                             details={"hybrid_level": hybrid_level.value, "provider_state": p_state.value}
                         )
                     )
-
-        # 4. Route to target worker
-        worker_name = "ai-studio-worker" if classification == TaskClassification.CONTEXT_ANALYSIS else ("argus" if classification == TaskClassification.VISION else "composite")
 
         # Loop check on worker routing
         is_loop, loop_msg = self.check_loop(f"{worker_name}:{classification.value}")

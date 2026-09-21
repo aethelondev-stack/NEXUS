@@ -93,6 +93,13 @@ class WorkerRegistry:
             return [w for w in self._workers.values() if w.enabled]
         return list(self._workers.values())
 
+    def is_worker_enabled(self, worker_id: str) -> bool:
+        norm_id = "bubu" if worker_id in ("bubu", "ai-studio-worker") else worker_id
+        worker = self.get_worker(norm_id)
+        if not worker:
+            return False
+        return bool(worker.enabled)
+
     def find_by_type(self, worker_type: str) -> List[WorkerDefinition]:
         return [w for w in self.list_workers() if w.worker_type == worker_type]
 
