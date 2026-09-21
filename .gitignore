@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.tmp
+*.log
+
+# Environments
+.venv/
+venv/
+env/
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime State
+*.lock
+provider-state/
+evidence_store.json
