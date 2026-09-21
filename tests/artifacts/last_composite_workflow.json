@@ -1,6 +1,6 @@
 {
-  "workflow_id": "wf-exp-20260921234746-8451e4",
-  "timestamp": "2026-09-21T23:47:51.443681+00:00",
+  "workflow_id": "wf-exp-20260921235155-ee6b7b",
+  "timestamp": "2026-09-21T23:51:59.953496+00:00",
   "orchestrator_version": "3.0.0",
   "execution_mode": "composite_workflow_sequential",
   "environment": {
@@ -10,48 +10,48 @@
     "bubu_transport": "cli"
   },
   "fixture": {
-    "name": "composite_fixture_9e7aa0.py",
-    "sha256": "ce13c53877b7359bb2e18a9c0d8d2e43cb49a9fe76123c427f4bb0acb1748cd6",
-    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_9e7aa0.txt"
+    "name": "composite_fixture_b87ada.py",
+    "sha256": "c66ee8f3a96ffee5dc41187b43a80a4d066951d74b16f978812f337f9c6eb97b",
+    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_b87ada.txt"
   },
   "workflow_response": {
     "worker_name": "composite",
     "status": "success",
-    "duration_seconds": 4.739,
+    "duration_seconds": 4.601,
     "steps_total": 2,
     "steps_executed": 2,
     "aggregated_findings_count": 18,
     "aggregated_evidence_count": 4,
     "findings_sample": [
-      "Arbitrary code execution via built-in eval function using untrusted dictionary payloads.",
+      "Arbitrary code execution via Python eval() function on untrusted payload input.",
       "Hardcoded sensitive demo token stored in plaintext within the source code.",
-      "Potential ZeroDivisionError caused by unchecked dictionary retrieval for divisor factors.",
-      "Desktop Item: 0_COMPOSITE_WORKFLOW_MARKER_9e7aa0.txt",
+      "Unchecked division by zero flaw when payload factor defaults to zero.",
+      "Desktop Item: 0_COMPOSITE_WORKFLOW_MARKER_b87ada.txt",
       "Desktop Item: .ai-worker"
     ],
     "evidence_sample": [
       {
         "source": "bubu",
-        "file": "composite_fixture_9e7aa0.py",
+        "file": "composite_fixture_b87ada.py",
         "line_start": 10,
         "line_end": 10,
-        "finding": "Arbitrary code execution using eval on untrusted input payload",
+        "finding": "Arbitrary code execution using eval() on payload expression",
         "confidence": 1.0
       },
       {
         "source": "bubu",
-        "file": "composite_fixture_9e7aa0.py",
+        "file": "composite_fixture_b87ada.py",
         "line_start": 13,
         "line_end": 13,
-        "finding": "Hardcoded sensitive demo token",
+        "finding": "Hardcoded secret token stored in plaintext",
         "confidence": 1.0
       },
       {
         "source": "bubu",
-        "file": "composite_fixture_9e7aa0.py",
+        "file": "composite_fixture_b87ada.py",
         "line_start": 16,
         "line_end": 16,
-        "finding": "Unchecked division by zero without validating factor presence or non-zero value",
+        "finding": "Division by zero vulnerability on payload factor",
         "confidence": 1.0
       }
     ]

@@ -1,6 +1,6 @@
-# Installation & Integration Guide: ORCHESTRATOR V3
+# Installation & Integration Guide: NEXUS
 
-This guide provides step-by-step instructions for installing ORCHESTRATOR and connecting it to your AI coding agent environment.
+This guide provides step-by-step instructions for installing NEXUS and connecting it to your AI coding agent environment.
 
 ---
 
@@ -12,19 +12,19 @@ This guide provides step-by-step instructions for installing ORCHESTRATOR and co
 
 ---
 
-## 2. Installing ORCHESTRATOR Core
+## 2. Installing NEXUS Core
 
 ### Windows (PowerShell)
 ```powershell
-git clone https://github.com/aethelondev-stack/ORCHESTRATOR.git C:\Tools\ORCHESTRATOR
-cd C:\Tools\ORCHESTRATOR
+git clone https://github.com/aethelondev-stack/NEXUS.git C:\Tools\NEXUS
+cd C:\Tools\NEXUS
 pip install -r requirements.txt
 ```
 
 ### Linux / macOS (Bash)
 ```bash
-git clone https://github.com/aethelondev-stack/ORCHESTRATOR.git ~/tools/ORCHESTRATOR
-cd ~/tools/ORCHESTRATOR
+git clone https://github.com/aethelondev-stack/NEXUS.git ~/tools/NEXUS
+cd ~/tools/NEXUS
 pip install -r requirements.txt
 ```
 
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 ## 3. Configuring the Global Worker Registry
 
-Orchestrator reads its global worker definitions from `~/.gemini/orchestrator/workers.json`.
+NEXUS reads its global worker definitions from `~/.gemini/orchestrator/workers.json`.
 
 ### Windows Setup
 ```powershell
@@ -75,6 +75,8 @@ cp workers.example.json ~/.gemini/orchestrator/workers.json
 
 ## 5. Agent Host MCP Configurations
 
+NEXUS exposes a FastMCP stdio server at `orchestrator/mcp_server.py`. Coding agents supporting MCP 1.0 stdio can connect via their respective configuration files:
+
 ### Antigravity (`~/.gemini/config/mcp_config.json`)
 ```json
 {
@@ -82,10 +84,10 @@ cp workers.example.json ~/.gemini/orchestrator/workers.json
     "orchestrator": {
       "command": "python",
       "args": [
-        "C:\\Tools\\ORCHESTRATOR\\orchestrator\\mcp_server.py"
+        "C:\\Tools\\NEXUS\\orchestrator\\mcp_server.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Tools\\ORCHESTRATOR"
+        "PYTHONPATH": "C:\\Tools\\NEXUS"
       }
     }
   }
@@ -99,10 +101,10 @@ cp workers.example.json ~/.gemini/orchestrator/workers.json
     "orchestrator": {
       "command": "python",
       "args": [
-        "C:\\Tools\\ORCHESTRATOR\\orchestrator\\mcp_server.py"
+        "C:\\Tools\\NEXUS\\orchestrator\\mcp_server.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Tools\\ORCHESTRATOR"
+        "PYTHONPATH": "C:\\Tools\\NEXUS"
       }
     }
   }
@@ -111,7 +113,7 @@ cp workers.example.json ~/.gemini/orchestrator/workers.json
 
 ### Claude Code CLI
 ```bash
-claude mcp add orchestrator python C:\Tools\ORCHESTRATOR\orchestrator\mcp_server.py -e PYTHONPATH=C:\Tools\ORCHESTRATOR
+claude mcp add orchestrator python C:\Tools\NEXUS\orchestrator\mcp_server.py -e PYTHONPATH=C:\Tools\NEXUS
 ```
 
 ### OpenCode (`opencode.json`)
@@ -122,10 +124,10 @@ claude mcp add orchestrator python C:\Tools\ORCHESTRATOR\orchestrator\mcp_server
       "type": "stdio",
       "command": "python",
       "args": [
-        "C:\\Tools\\ORCHESTRATOR\\orchestrator\\mcp_server.py"
+        "C:\\Tools\\NEXUS\\orchestrator\\mcp_server.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Tools\\ORCHESTRATOR"
+        "PYTHONPATH": "C:\\Tools\\NEXUS"
       }
     }
   }
@@ -148,4 +150,7 @@ python -m unittest discover -s tests
 
 # Run end-to-end integration test matrix
 python tests/verify_root_cause_chains.py
+
+# Run composite multi-worker workflow proof
+python tests/verify_composite_workflow.py
 ```

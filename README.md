@@ -153,6 +153,8 @@ NEXUS establishes a centralized, project-independent architecture:
 3. **Safe Target Anchoring:** When an agent invokes NEXUS to inspect files in `Project A`, `BubuAdapter` dynamically anchors execution relative to `Project A`'s directory without polluting it with duplicated source files.
 4. **Optional Local Overrides:** Projects do not need configuration files. However, if a project specifically requires disabling a worker, a minimal 2-line JSON (`.ai-worker/config.json` or `.argus/config.json`) acts as an optional workspace override.
 
+> **Scope & Scalability Note:** The central registry (`workers.json`), global FastMCP stdio server, and dynamic directory anchoring (`BubuAdapter._resolve_target_dir_and_files`) architecturally decouple worker installations from individual project trees. While this eliminates the need for copying `.agents/` or worker folders into new projects, empirical verification has been conducted across targeted test workspaces; unlimited concurrent projects have not been benchmarked.
+
 ---
 
 ## Works With Your Coding Agent
@@ -160,6 +162,8 @@ NEXUS establishes a centralized, project-independent architecture:
 NEXUS integrates with coding agents using the open **Model Context Protocol (MCP 1.0)** standard over stdio.
 
 > **Important:** NEXUS does **not** require proprietary closed-source plugins. Any client that supports MCP stdio can supervise tasks through NEXUS.
+>
+> **Validation Note:** Antigravity is the primary empirical runtime where MCP tools and multi-worker workflows are continuously tested and proven. Cursor, Claude Code, and OpenCode interact through the standard FastMCP stdio interface. While MCP protocol compatibility is verified, end-to-end task flows inside third-party graphical client UIs have not been tested individually.
 
 ### Antigravity
 Add to `~/.gemini/config/mcp_config.json`:
@@ -168,8 +172,8 @@ Add to `~/.gemini/config/mcp_config.json`:
   "mcpServers": {
     "orchestrator": {
       "command": "python",
-      "args": ["C:\\Tools\\ORCHESTRATOR\\orchestrator\\mcp_server.py"],
-      "env": { "PYTHONPATH": "C:\\Tools\\ORCHESTRATOR" }
+      "args": ["C:\\Tools\\NEXUS\\orchestrator\\mcp_server.py"],
+      "env": { "PYTHONPATH": "C:\\Tools\\NEXUS" }
     }
   }
 }
@@ -182,8 +186,8 @@ Add to `.cursor/mcp.json` or Cursor Settings -> Features -> MCP:
   "mcpServers": {
     "orchestrator": {
       "command": "python",
-      "args": ["C:\\Tools\\ORCHESTRATOR\\orchestrator\\mcp_server.py"],
-      "env": { "PYTHONPATH": "C:\\Tools\\ORCHESTRATOR" }
+      "args": ["C:\\Tools\\NEXUS\\orchestrator\\mcp_server.py"],
+      "env": { "PYTHONPATH": "C:\\Tools\\NEXUS" }
     }
   }
 }
@@ -192,7 +196,7 @@ Add to `.cursor/mcp.json` or Cursor Settings -> Features -> MCP:
 ### Claude Code
 Add via CLI or configuration file (`~/.claude.json`):
 ```bash
-claude mcp add orchestrator python C:\Tools\ORCHESTRATOR\orchestrator\mcp_server.py -e PYTHONPATH=C:\Tools\ORCHESTRATOR
+claude mcp add orchestrator python C:\Tools\NEXUS\orchestrator\mcp_server.py -e PYTHONPATH=C:\Tools\NEXUS
 ```
 
 ### OpenCode
@@ -203,8 +207,8 @@ Add to `opencode.json`:
     "orchestrator": {
       "type": "stdio",
       "command": "python",
-      "args": ["C:\\Tools\\ORCHESTRATOR\\orchestrator\\mcp_server.py"],
-      "env": { "PYTHONPATH": "C:\\Tools\\ORCHESTRATOR" }
+      "args": ["C:\\Tools\\NEXUS\\orchestrator\\mcp_server.py"],
+      "env": { "PYTHONPATH": "C:\\Tools\\NEXUS" }
     }
   }
 }
