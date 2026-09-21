@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-orchestrator"
 version = "3.0.0"
-description = "Master Agent Orchestrator, Quota Supervisor, and Multi-Worker Evidence Coordinator for MCP-Compatible Coding Agents."
+description = "NEXUS: Unified Multi-Worker Coordinator, Quota Supervisor, and Evidence Routing Layer for BUBU and ARGUS."
 readme = "README.md"
 authors = [
     { name = "aethelondev-stack" }
