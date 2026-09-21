@@ -32,6 +32,48 @@ class BubuAdapter(BaseWorkerAdapter):
 
         return True, "BUBU worker is available."
 
+    def _get_execution_env(self) -> Dict[str, str]:
+        env = os.environ.copy()
+        if not env.get("GEMINI_API_KEY") and not env.get("GOOGLE_API_KEY"):
+            try:
+                import winreg
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+                    val, _ = winreg.QueryValueEx(key, "GEMINI_API_KEY")
+                    if val:
+                        env["GEMINI_API_KEY"] = str(val)
+            except Exception:
+                pass
+        return env
+
+    def _resolve_target_dir_and_files(self, requested_files: List[str]) -> Tuple[pathlib.Path, List[str]]:
+        target_dir = self.project_root.resolve() if (self.project_root and self.project_root.exists()) else pathlib.Path.cwd().resolve()
+        rel_files: List[str] = []
+
+        if requested_files:
+            first_p = pathlib.Path(requested_files[0]).resolve()
+            parent_dir = first_p.parent if first_p.is_file() else first_p
+            try:
+                first_p.relative_to(target_dir)
+            except ValueError:
+                target_dir = parent_dir
+
+            for f_str in requested_files:
+                p = pathlib.Path(f_str).resolve()
+                try:
+                    rel_p = p.relative_to(target_dir)
+                    rel_files.append(str(rel_p))
+                except ValueError:
+                    rel_files.append(p.name)
+
+        ai_worker_dir = target_dir / ".ai-worker"
+        if not ai_worker_dir.exists():
+            try:
+                ai_worker_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+
+        return target_dir, rel_files
+
     def invoke(self, request: WorkerRequest) -> WorkerResponse:
         start_time = time.time()
         task_id = request.task_id
@@ -67,7 +109,10 @@ class BubuAdapter(BaseWorkerAdapter):
                     metrics={"duration_seconds": round(time.time() - start_time, 4)}
                 )
 
-        # 3. Assemble subprocess command
+        # 3. Resolve target directory, files, and project root anchor
+        target_dir, rel_files = self._resolve_target_dir_and_files(request.files)
+
+        # 4. Assemble subprocess command
         python_exe = sys.executable or self.definition.python_executable or "python"
         cmd = [python_exe, str(self.definition.entrypoint)]
 
@@ -80,25 +125,30 @@ class BubuAdapter(BaseWorkerAdapter):
         if request.prompt:
             cmd.extend(["--prompt", request.prompt])
 
-        if request.files:
+        if rel_files:
             cmd.append("--files")
-            cmd.extend([str(f) for f in request.files])
+            cmd.extend(rel_files)
 
         if is_dry_run:
             if request.parameters.get("decide"):
                 cmd.append("--decide")
             else:
                 cmd.append("--dry-run")
+        else:
+            # Override to active low-latency model to avoid 503/timeout on default gemini-3.6-flash
+            active_model = request.parameters.get("model") or "gemini-3.5-flash-lite"
+            cmd.extend(["--model", active_model])
 
-        # 4. Execute subprocess
+        # 5. Execute subprocess
+        env = self._get_execution_env()
         try:
-            cwd = str(self.project_root) if self.project_root.exists() else None
             result = subprocess.run(
                 cmd,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
-                cwd=cwd,
+                cwd=str(target_dir),
+                env=env,
                 timeout=self.definition.timeout_seconds
             )
         except subprocess.TimeoutExpired:
@@ -178,11 +228,14 @@ class BubuAdapter(BaseWorkerAdapter):
 
             for item in parsed_json.get("evidence", []):
                 evidence_list.append(Evidence(
-                    file_path=item.get("file_path", ""),
-                    line_start=item.get("line_start", 1),
-                    line_end=item.get("line_end", 1),
+                    source="bubu",
+                    file=item.get("file") or item.get("file_path", ""),
+                    line_start=int(item.get("line") or item.get("line_start", 1)),
+                    line_end=int(item.get("line_end", item.get("line", 1))),
                     content_hash=item.get("content_hash", ""),
-                    verified=item.get("verified", True)
+                    commit_hash=item.get("commit_hash", "UNKNOWN"),
+                    finding=item.get("note") or item.get("finding", ""),
+                    confidence=float(item.get("confidence", 1.0))
                 ))
             findings = parsed_json.get("findings", [raw_output[:300]])
         else:
@@ -192,24 +245,27 @@ class BubuAdapter(BaseWorkerAdapter):
         for f_path_str in request.files:
             p = pathlib.Path(f_path_str)
             if not p.is_absolute():
-                p = self.project_root / p
+                p = target_dir / p
             if p.exists() and p.is_file():
                 try:
                     content = p.read_text(encoding="utf-8", errors="ignore")
                     c_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
                     evidence_list.append(Evidence(
-                        file_path=str(p),
+                        source="bubu",
+                        file=str(p),
                         line_start=1,
                         line_end=len(content.splitlines()) or 1,
                         content_hash=c_hash,
-                        verified=True
+                        commit_hash="LOCAL",
+                        finding=f"Inspected file {p.name}",
+                        confidence=1.0
                     ))
                 except Exception:
                     pass
 
         # Record success in provider manager
         if not is_dry_run:
-            self.provider_manager.record_success("gemini", estimated_in=len(request.prompt), estimated_out=len(raw_output))
+            self.provider_manager.record_success("gemini", estimated_in_tokens=len(request.prompt), estimated_out_tokens=len(raw_output))
 
         return WorkerResponse(
             task_id=task_id,

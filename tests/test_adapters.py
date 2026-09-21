@@ -64,6 +64,28 @@ class TestWorkerAdapters(unittest.TestCase):
         self.assertIsNotNone(resp.error)
         self.assertEqual(resp.error.error_code, "PROVIDER_QUOTA_EXHAUSTED")
 
+    def test_bubu_adapter_external_files_dry_run(self):
+        bubu_def = self.reg.get_worker("bubu")
+        self.assertIsNotNone(bubu_def)
+
+        # Create a sample file in isolated temp dir
+        test_file = pathlib.Path(self.temp_dir.name) / "sample_service.py"
+        test_file.write_text("def service():\n    return 'ok'\n")
+
+        adapter = BubuAdapter(bubu_def, project_root=pathlib.Path(self.temp_dir.name), provider_manager=self.pm)
+        req = WorkerRequest(
+            task_id="test-bubu-ext-files",
+            task_type="AUDIT",
+            prompt="Audit service",
+            files=[str(test_file)],
+            parameters={"dry_run": True}
+        )
+        resp = adapter.invoke(req)
+        self.assertEqual(resp.status, "success")
+        self.assertEqual(resp.worker_name, "bubu")
+        self.assertGreaterEqual(len(resp.evidence), 1)
+
+
     def test_argus_adapter_desktop_items(self):
         argus_def = self.reg.get_worker("argus")
         self.assertIsNotNone(argus_def, "ARGUS worker definition must exist in global registry")

@@ -134,6 +134,17 @@ def create_mcp_server():
         actual_files = [str(f) for f in files] if not hasattr(files, "default") else []
         actual_prompt = str(prompt) if not hasattr(prompt, "default") else ""
 
+        # Ensure adapters are dynamically fresh
+        try:
+            import importlib
+            import orchestrator.adapters.argus_adapter as argus_mod
+            import orchestrator.adapters.bubu_adapter as bubu_mod
+            importlib.reload(argus_mod)
+            importlib.reload(bubu_mod)
+            orch._init_adapters()
+        except Exception:
+            pass
+
         params: Dict[str, Any] = {"dry_run": actual_dry_run}
         if actual_action:
             params["action"] = actual_action
@@ -160,11 +171,14 @@ def create_mcp_server():
         """
         from orchestrator.contracts import Evidence
         ev = Evidence(
-            file_path=file_path,
+            source="manual_verification",
+            file=file_path,
             line_start=line_start,
             line_end=line_end,
             content_hash=content_hash,
-            verified=True
+            commit_hash="LOCAL",
+            finding="Verification check",
+            confidence=1.0
         )
         orch.evidence_store.ingest_batch([ev])
         status = orch.evidence_store.verify_evidence(ev)

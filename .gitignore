@@ -19,3 +19,5 @@ Thumbs.db
 *.lock
 provider-state/
 evidence_store.json
+.ai-worker/
+

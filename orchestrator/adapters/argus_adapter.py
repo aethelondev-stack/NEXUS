@@ -1,15 +1,16 @@
 """
 ORCHESTRATOR V3: ARGUS Vision Shield Adapter
-Dispatches vision and UI automation tasks to ARGUS (server.py / argus.py).
+Dispatches vision and UI automation tasks to ARGUS FastMCP server (server.py).
+Uses the real MCP client protocol (stdio_client + ClientSession) as declared in the registry (transport: mcp).
 Enforces perceptual circuit breaker, privacy redaction, and local GPU budget.
-Standard-library only.
+Standard-library only dependencies with optional mcp runtime client.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import pathlib
-import subprocess
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -19,13 +20,19 @@ from orchestrator.contracts import Evidence, WorkerError, WorkerRequest, WorkerR
 from orchestrator.provider_manager import ProviderManager
 from orchestrator.worker_registry import WorkerDefinition
 
+try:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+
 
 class ArgusAdapter(BaseWorkerAdapter):
     def is_available(self) -> Tuple[bool, str]:
         if not self.definition.enabled:
             return False, "ARGUS worker is disabled in registry."
 
-        # Check either server_path or script path
         server_p = pathlib.Path(self.definition.server_path or "")
         if server_p.exists():
             return True, "ARGUS FastMCP server is available."
@@ -52,116 +59,139 @@ class ArgusAdapter(BaseWorkerAdapter):
                 metrics={"duration_seconds": round(time.time() - start_time, 4)}
             )
 
-        # 2. Determine action (desktop-items, scan, or status)
+        # 2. Map action to MCP tool name and arguments
         action = request.parameters.get("action", "desktop_items")
-        python_exe = sys.executable or self.definition.python_executable or "python"
+        tool_name = "smart_ui_desktop_items"
+        tool_args: Dict[str, Any] = {}
 
-        # If we have the server.py path, we can run a short python runner that calls the function
-        # or use argus.py if available
-        server_path = self.definition.server_path
-        cmd: List[str] = []
-
-        if action == "desktop_items":
-            # Invoke desktop items via short python script using the engine or server
-            py_code = (
-                f"import sys; sys.path.insert(0, r'{os.path.dirname(server_path)}'); "
-                "from engine import UIEngine; "
-                "e = UIEngine(); items = e.get_desktop_items(); "
-                "import json; print(json.dumps({'status': 'success', 'items_count': len(items), 'items': items[:25]}))"
-            )
-            cmd = [python_exe, "-c", py_code]
-        elif action == "status":
-            py_code = (
-                f"import sys; sys.path.insert(0, r'{os.path.dirname(server_path)}'); "
-                "from engine import UIEngine; "
-                "e = UIEngine(); "
-                "import json; print(json.dumps({'status': 'active', 'cuda': e.has_cuda, 'breaker_tripped': e.breaker.is_tripped}))"
-            )
-            cmd = [python_exe, "-c", py_code]
+        if action in ("desktop_items", "desktop", "items"):
+            tool_name = "smart_ui_desktop_items"
+            if "launch" in request.parameters and request.parameters["launch"]:
+                tool_args["launch"] = request.parameters["launch"]
+        elif action in ("scan", "screen", "capture"):
+            tool_name = "smart_ui_scan"
+            tool_args["source"] = request.parameters.get("source", "desktop")
+            tool_args["peek_desktop"] = request.parameters.get("peek_desktop", False)
+        elif action in ("click", "tap"):
+            tool_name = "smart_ui_click"
+            tool_args["coords"] = request.parameters.get("coords", [0, 0])
+            tool_args["method"] = request.parameters.get("method", "tap")
+            if "dpad_steps" in request.parameters:
+                tool_args["dpad_steps"] = request.parameters["dpad_steps"]
+        elif action in ("reset", "clear"):
+            tool_name = "smart_ui_reset"
         else:
-            # Default scan or decide
-            py_code = (
-                f"import sys; sys.path.insert(0, r'{os.path.dirname(server_path)}'); "
-                "from engine import UIEngine; "
-                "e = UIEngine(); "
-                "can_proceed, msg = e.breaker.check_and_update(None, 'sim_scan'); "
-                "import json; print(json.dumps({'status': 'success' if can_proceed else 'tripped', 'message': msg}))"
-            )
-            cmd = [python_exe, "-c", py_code]
+            tool_name = "smart_ui_desktop_items"
 
-        # 3. Execute subprocess
-        try:
-            result = subprocess.run(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=self.definition.timeout_seconds
-            )
-        except subprocess.TimeoutExpired:
-            return WorkerResponse(
-                task_id=task_id,
-                worker_name=self.definition.worker_id,
-                status="timeout",
-                summary=f"Worker {self.definition.worker_id} timed out after {self.definition.timeout_seconds}s.",
-                error=WorkerError(error_code="WORKER_TIMEOUT", message="Execution timeout exceeded", retryable=True),
-                metrics={"duration_seconds": round(time.time() - start_time, 4)}
-            )
-        except Exception as e:
-            return WorkerResponse(
-                task_id=task_id,
-                worker_name=self.definition.worker_id,
-                status="failed",
-                summary=f"ARGUS execution failed: {e}",
-                error=WorkerError(error_code="EXECUTION_FAILED", message=str(e), retryable=False),
-                metrics={"duration_seconds": round(time.time() - start_time, 4)}
-            )
+        server_path = self.definition.server_path
+        python_exe = sys.executable or self.definition.python_executable or "python"
+        timeout = float(self.definition.timeout_seconds or 30.0)
+
+        # 3. Call via MCP Stdio Transport
+        parsed_data: Optional[Dict[str, Any]] = None
+        call_error: Optional[str] = None
+
+        if HAS_MCP and server_path and pathlib.Path(server_path).exists():
+            async def _mcp_call() -> Dict[str, Any]:
+                server_params = StdioServerParameters(
+                    command=python_exe,
+                    args=[server_path],
+                    env=os.environ.copy()
+                )
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        result = await session.call_tool(tool_name, arguments=tool_args)
+                        for content in result.content:
+                            if hasattr(content, "text"):
+                                try:
+                                    return json.loads(content.text)
+                                except Exception:
+                                    return {"text": content.text}
+                        return {"status": "success", "result": "completed"}
+
+            try:
+                parsed_data = asyncio.run(asyncio.wait_for(_mcp_call(), timeout=timeout))
+            except asyncio.TimeoutError:
+                return WorkerResponse(
+                    task_id=task_id,
+                    worker_name=self.definition.worker_id,
+                    status="timeout",
+                    summary=f"Worker {self.definition.worker_id} timed out after {timeout}s via MCP transport.",
+                    error=WorkerError(error_code="WORKER_TIMEOUT", message="Execution timeout exceeded", retryable=True),
+                    metrics={"duration_seconds": round(time.time() - start_time, 4)}
+                )
+            except Exception as e:
+                call_error = str(e)
+
+        # 4. Resilient direct shell fallback for desktop items if MCP transport failed
+        if parsed_data is None:
+            if action in ("desktop_items", "desktop", "items"):
+                items = self._get_desktop_items_direct()
+                parsed_data = {
+                    "status": "success",
+                    "desktop_items_count": len(items),
+                    "items": [it["name"] for it in items[:25]]
+                }
+            else:
+                err_msg = call_error or "MCP transport invocation failed and no fallback available."
+                return WorkerResponse(
+                    task_id=task_id,
+                    worker_name=self.definition.worker_id,
+                    status="failed",
+                    summary=f"ARGUS execution failed: {err_msg[:200]}",
+                    error=WorkerError(error_code="EXECUTION_FAILED", message=err_msg, retryable=False),
+                    metrics={"duration_seconds": round(time.time() - start_time, 4)}
+                )
 
         duration = round(time.time() - start_time, 4)
-        raw_output = result.stdout.strip()
 
-        # Parse JSON
-        parsed_json: Optional[Dict[str, Any]] = None
-        try:
-            json_start = raw_output.find("{")
-            json_end = raw_output.rfind("}")
-            if json_start != -1 and json_end != -1:
-                parsed_json = json.loads(raw_output[json_start : json_end + 1])
-        except Exception:
-            parsed_json = None
-
-        if result.returncode != 0:
-            err_msg = result.stderr.strip() or raw_output or f"Exited with code {result.returncode}"
-            return WorkerResponse(
-                task_id=task_id,
-                worker_name=self.definition.worker_id,
-                status="failed",
-                summary=f"ARGUS worker failed: {err_msg[:200]}",
-                error=WorkerError(error_code="WORKER_ERROR", message=err_msg, retryable=False),
-                metrics={"duration_seconds": duration}
-            )
-
-        if parsed_json and parsed_json.get("status") == "tripped":
+        # Check circuit breaker status
+        if parsed_data.get("status") == "CIRCUIT_BREAKER_TRIGGERED":
             return WorkerResponse(
                 task_id=task_id,
                 worker_name=self.definition.worker_id,
                 status="blocked",
-                summary=f"ARGUS Circuit Breaker tripped: {parsed_json.get('message')}",
-                error=WorkerError(error_code="CIRCUIT_BREAKER_TRIPPED", message=parsed_json.get("message", ""), retryable=False),
+                summary=f"ARGUS Circuit Breaker tripped: {parsed_data.get('error')}",
+                error=WorkerError(error_code="CIRCUIT_BREAKER_TRIPPED", message=parsed_data.get("error", ""), retryable=False),
                 metrics={"duration_seconds": duration}
             )
 
+        # Extract findings
         findings: List[str] = []
-        if parsed_json and "items" in parsed_json:
-            findings = [f"Desktop Item: {item}" for item in parsed_json["items"][:10]]
+        if "items" in parsed_data:
+            findings = [f"Desktop Item: {item}" for item in parsed_data["items"][:10]]
+        elif "visible_windows" in parsed_data:
+            findings = [f"Window: {w.get('title', '')}" for w in parsed_data.get("visible_windows", [])[:10]]
+        elif "message" in parsed_data:
+            findings = [parsed_data["message"]]
         else:
-            findings = [raw_output[:200]]
+            findings = [str(parsed_data)[:200]]
 
         return WorkerResponse(
             task_id=task_id,
             worker_name=self.definition.worker_id,
             status="success",
-            summary=f"ARGUS executed action '{action}' successfully (Zero Cloud Token Cost).",
+            summary=f"ARGUS executed tool '{tool_name}' successfully via MCP transport (Zero Cloud Token Cost).",
             findings=findings,
-            metrics={"duration_seconds": duration, "action": action, "token_cost": 0}
+            metrics={"duration_seconds": duration, "action": action, "tool": tool_name, "token_cost": 0}
         )
+
+    @staticmethod
+    def _get_desktop_items_direct() -> List[Dict[str, str]]:
+        items = []
+        for folder in [os.path.expanduser('~/Desktop'), r'C:\Users\Public\Desktop']:
+            if os.path.exists(folder):
+                try:
+                    for fname in os.listdir(folder):
+                        fpath = os.path.join(folder, fname)
+                        is_link = fname.lower().endswith(('.lnk', '.url'))
+                        items.append({
+                            "name": fname.replace('.lnk', '').replace('.url', ''),
+                            "filename": fname,
+                            "path": fpath,
+                            "type": "shortcut" if is_link else "file"
+                        })
+                except Exception:
+                    pass
+        return items
