@@ -26,6 +26,9 @@ from orchestrator.contracts import (
 )
 from orchestrator.evidence_store import EvidenceStore
 from orchestrator.provider_manager import HybridModeLevel, ProviderManager, ProviderState
+from orchestrator.worker_registry import WorkerRegistry, WorkerDefinition
+from orchestrator.adapters.bubu_adapter import BubuAdapter
+from orchestrator.adapters.argus_adapter import ArgusAdapter
 
 
 class TaskClassification(enum.Enum):
@@ -58,6 +61,7 @@ class Orchestrator:
         self,
         project_root: Optional[pathlib.Path] = None,
         provider_manager: Optional[ProviderManager] = None,
+        registry: Optional[WorkerRegistry] = None,
         max_retries: int = 3,
         max_replans: int = 2,
         max_wall_time_seconds: float = 60.0,
@@ -66,6 +70,7 @@ class Orchestrator:
         self.project_root = pathlib.Path(project_root or ".").resolve()
         self.provider_manager = provider_manager or ProviderManager()
         self.evidence_store = EvidenceStore(project_root=self.project_root)
+        self.registry = registry or WorkerRegistry()
         self.max_retries = max_retries
         self.max_replans = max_replans
         self.max_wall_time_seconds = max_wall_time_seconds
@@ -75,6 +80,21 @@ class Orchestrator:
         self._action_history: collections.deque[str] = collections.deque(maxlen=self.loop_window_size)
         self._fingerprint_counts: Dict[str, int] = {}
         self._registered_workers: Dict[str, Callable[[WorkerRequest], WorkerResponse]] = {}
+
+        # Auto-wire known adapters from global registry
+        self._init_default_adapters()
+
+    def _init_default_adapters(self) -> None:
+        bubu_def = self.registry.get_worker("bubu")
+        if bubu_def:
+            bubu_adapter = BubuAdapter(bubu_def, self.project_root, self.provider_manager)
+            self.register_worker("bubu", bubu_adapter.invoke)
+            self.register_worker("ai-studio-worker", bubu_adapter.invoke)
+
+        argus_def = self.registry.get_worker("argus")
+        if argus_def:
+            argus_adapter = ArgusAdapter(argus_def, self.project_root, self.provider_manager)
+            self.register_worker("argus", argus_adapter.invoke)
 
     def register_worker(self, name: str, handler: Callable[[WorkerRequest], WorkerResponse]):
         self._registered_workers[name] = handler
@@ -88,7 +108,11 @@ class Orchestrator:
         params = parameters or {}
 
         # 1. Vision signals (Screen, Desktop, UI, BlueStacks, ADB)
-        has_vision = any(k in p_lower for k in ["screen", "ekran", "görsel", "screenshot", "ui element", "bluestacks", "adb", "ocr"]) or params.get("requires_vision")
+        has_vision = (
+            any(k in p_lower for k in ["screen", "ekran", "görsel", "screenshot", "ui", "desktop", "masaüstü", "bluestacks", "adb", "ocr"])
+            or params.get("requires_vision")
+            or params.get("action") in ("desktop_items", "scan", "click")
+        )
 
         # 2. Context Analysis signals (Large multi-file, architecture, audit, memory leak, root cause)
         has_heavy_context = (
@@ -226,11 +250,11 @@ class Orchestrator:
                     error=WorkerError(error_code="WORKER_EXCEPTION", message=str(e), retryable=False)
                 )
 
-        # If running via orchestrated CLI / subagent interface
+        # If running without registered handler for this worker
         return WorkerResponse(
             task_id=task_id,
             worker_name="orchestrator",
-            status="success",
-            summary=f"Task routed to {worker_name} under {hybrid_level.value} mode.",
+            status="routed_only",
+            summary=f"Task routed to {worker_name} under {hybrid_level.value} mode, but no active worker handler registered.",
             metrics={"classification": classification.value, "hybrid_level": hybrid_level.value, "duration": round(time.time() - start_time, 4)}
         )
