@@ -164,7 +164,6 @@ def create_mcp_server():
             files=actual_files,
             parameters=params
         )
-        orch.reset_history()
         resp = orch.execute_task(req)
         return resp.to_dict()
 
