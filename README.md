@@ -29,7 +29,7 @@
 - [MCP Tools Reference](#mcp-tools-reference)
 - [Configuration & State Management](#configuration--state-management)
 - [Verification & Smoke Tests](#verification--smoke-tests)
-- [Real Two-Worker Integration Proof](#real-two-worker-integration-proof)
+- [Real Multi-Worker Composite Workflow Proof](#real-multi-worker-composite-workflow-proof)
 - [Troubleshooting](#troubleshooting)
 - [Security & API Key Handling](#security--api-key-handling)
 - [Cross-Platform Support](#cross-platform-support)
@@ -571,60 +571,62 @@ OVERALL RESULT: 100% PASS
 
 ---
 
-## Real Two-Worker Integration Proof
+## Real Multi-Worker Composite Workflow Proof
 
-ORCHESTRATOR V3 provides an automated end-to-end integration test verifying that both specialized workers—**BUBU** (Cloud LLM Context Worker) and **ARGUS** (On-device FastMCP Vision Shield)—are coordinated within a single workflow.
+ORCHESTRATOR V3 provides an automated end-to-end composite workflow test verifying that Orchestrator Core acts as a unified coordinator: executing multiple specialized workers—**BUBU** (Cloud LLM Context Worker) and **ARGUS** (On-device FastMCP Vision Shield)—via a single public workflow invocation (`Orchestrator.execute_workflow(...)`) and aggregating their findings into a single composite `WorkerResponse`.
+
+Unlike simple multi-step test scripts, the test harness does **not** coordinate the workers directly. Orchestrator Core sequentially dispatches each step, enforces fail-fast error semantics, aggregates all findings and evidence, and returns a unified composite response.
 
 ### Automated Test Command
 ```powershell
-python tests/verify_two_worker_integration.py
+python tests/verify_composite_workflow.py
 ```
 
 ### Verification Methodology
-1. **Dynamic Test Fixture:** Generates an isolated Python fixture (`integration_payload_<hex>.py`) containing intentional security findings (arbitrary `eval()`, hardcoded token, unchecked division).
-2. **Desktop Marker Placement:** Places a temporary test marker (`0_ORCHESTRATOR_INTEGRATION_MARKER_<hex>.txt`) on the active Windows Desktop.
-3. **Phase 1 (BUBU Execution):** Dispatches code audit to BUBU via real Gemini Cloud API (`--model gemini-3.5-flash-lite`), verifying multi-line evidence and structured findings.
-4. **Phase 2 (ARGUS Execution):** Dispatches desktop inspection to ARGUS via native FastMCP JSON-RPC transport (`smart_ui_desktop_items`), discovering the desktop marker.
-5. **Cross-Correlation & Machine-Readable Artifact:** Cross-references the fixture SHA-256 and discovered marker into a sanitized machine-readable JSON artifact saved to `tests/artifacts/last_two_worker_integration.json`.
-6. **Guaranteed Cleanup & Registry Restoration:** A deterministic `try ... finally` block removes the desktop marker and test fixture, and restores `workers.json` to its pre-test configuration state.
+1. **Static Invariant Guarding:** The test statically verifies (via AST/source check) that 0 direct `orch.execute_task` calls and 0 adapter imports exist in the test logic. Orchestration is strictly delegated to `Orchestrator.execute_workflow([req_bubu, req_argus])`.
+2. **Dynamic Test Fixture & Marker:** Generates an isolated Python fixture (`composite_fixture_<hex>.py`) with intentional vulnerabilities (arbitrary `eval()`, hardcoded token, unchecked division) and places a temporary desktop marker (`0_COMPOSITE_WORKFLOW_MARKER_<hex>.txt`).
+3. **Single Public Workflow Call:** Invokes `orch.execute_workflow([req_bubu, req_argus], workflow_id=...)`.
+4. **Step 1 — BUBU Real Cloud API:** Orchestrator dispatches the code audit step to BUBU via real Gemini Cloud API (`--model gemini-3.5-flash-lite`), capturing line-level evidence and structured findings.
+5. **Step 2 — ARGUS Real FastMCP Desktop Discovery:** Orchestrator dispatches desktop inspection to ARGUS via native FastMCP JSON-RPC stdio transport (`smart_ui_desktop_items`), discovering the active desktop marker.
+6. **Orchestrator Aggregation:** Orchestrator Core aggregates all findings (BUBU code findings + ARGUS desktop items) and line-level evidence into a single `WorkerResponse` with `worker_name="composite"`, preserving per-step results in `metrics["step_responses"]`.
+7. **Machine-Readable Evidence Artifact:** Generates a sanitized JSON artifact saved to `tests/artifacts/last_composite_workflow.json`.
+8. **Guaranteed Cleanup & Registry Restoration:** A deterministic `try ... finally` block deletes the temporary marker, cleans up the test fixture, and restores `workers.json` to its pre-test configuration state.
 
 ### Empirical Execution Output
 ```text
-=================================================================
-ORCHESTRATOR V3: REAL TWO-WORKER INTEGRATION EXPERIMENT
-Coordinates real BUBU (Cloud LLM) + real ARGUS (Local FastMCP)
-=================================================================
-[*] Experiment ID        : exp-20260921231148-d8db9c
-[*] Desktop Marker Target: 0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt
+====================================================================
+ORCHESTRATOR V3: COMPOSITE MULTI-WORKER WORKFLOW EXECUTION PROOF
+Single Public Call: orch.execute_workflow([req_bubu, req_argus])
+====================================================================
+[+] Test Invariant Check: PASS (0 execute_task calls, 0 adapter imports in test)
+[*] Workflow ID         : wf-exp-20260921233212-60edb4
+[*] Desktop Marker Target: 0_COMPOSITE_WORKFLOW_MARKER_cfb5b0.txt
 [*] Gemini API Credential: CONFIGURED
 [+] Global Registry: Temporarily set enabled=True for BUBU & ARGUS.
-[+] Created Fixture: integration_payload_632cc3.py (SHA-256: e96fedc1dea53c08...)
-[+] Created Desktop Marker: 0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt
+[+] Created Fixture: composite_fixture_cfb5b0.py (SHA-256: 5548c4e475c660d5...)
+[+] Created Desktop Marker: 0_COMPOSITE_WORKFLOW_MARKER_cfb5b0.txt
 
---- Phase 1: BUBU Real Cloud API Execution ---
-[BUBU] Status   : success (3.093s)
-[BUBU] Findings : 3
-[BUBU] Evidence : 4 items
-       (1) Arbitrary code execution via Python eval() on unsanitized user payload dictionary values....
-       (2) Hardcoded sensitive secret key within the integration fixture....
-       (3) Potential ZeroDivisionError when processing the divisor from the user payload....
+--- Phase 1: Executing Single Public Workflow Call ---
 
---- Phase 2: ARGUS Real FastMCP Desktop Discovery ---
-[ARGUS] Status       : success (2.031s)
-[ARGUS] Transport    : mcp
-[ARGUS] Desktop Items: 46
-[ARGUS] Marker Found : True (0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt)
+--- Phase 2: Inspecting Orchestrator Composite Response ---
+[COMPOSITE] Worker Name    : composite
+[COMPOSITE] Workflow Status: success
+[COMPOSITE] Total Duration : 5.275s
+[COMPOSITE] Steps Executed : 2/2
+[COMPOSITE] Total Findings : 18
+[COMPOSITE] Total Evidence : 4
+       Step 1 (BUBU) : success (3 findings, 4 evidence)
+       Step 2 (ARGUS): success (46 items, transport=mcp)
+[COMPOSITE] Desktop Marker Found: True
+[+] Saved Evidence Artifact: tests\artifacts\last_composite_workflow.json
 
---- Phase 3: Combined Evidence Cross-Correlation ---
-[+] Saved Evidence Artifact: tests\artifacts\last_two_worker_integration.json
-
-=================================================================
-EXPERIMENT RESULT: 100% PASS (Both workers executed and cross-correlated)
-=================================================================
+====================================================================
+WORKFLOW PROOF RESULT: 100% PASS (Composite Multi-Worker Workflow Proven)
+====================================================================
 
 --- Cleanup & Safety Restoration ---
-[+] Cleaned up desktop marker: 0_ORCHESTRATOR_INTEGRATION_MARKER_632cc3.txt
-[+] Cleaned up test fixture: integration_payload_632cc3.py
+[+] Cleaned up desktop marker: 0_COMPOSITE_WORKFLOW_MARKER_cfb5b0.txt
+[+] Cleaned up test fixture: composite_fixture_cfb5b0.py
 [+] Global Registry: Successfully restored original pre-test state (disabled=false).
 ```
 

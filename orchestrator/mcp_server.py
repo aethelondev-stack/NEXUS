@@ -158,11 +158,13 @@ def create_mcp_server():
         task_type: str = Field(default="ANALYZE", description="Task type: ANALYZE, AUDIT, DEBUG, RESEARCH, etc."),
         action: Optional[str] = Field(default=None, description="Optional sub-action for vision workers (e.g. desktop_items, scan)"),
         dry_run: bool = Field(default=False, description="Run in dry-run mode without mutating or calling cloud APIs"),
-        worker: Optional[str] = Field(default=None, description="Optional explicit target worker: 'bubu', 'argus', etc.")
+        worker: Optional[str] = Field(default=None, description="Optional explicit target worker: 'bubu', 'argus', etc."),
+        steps: Optional[List[Dict[str, Any]]] = Field(default=None, description="Optional ordered list of workflow step definitions to execute as a composite workflow")
     ) -> Dict[str, Any]:
         """
         Executes task through the Orchestrator pipeline, routing to BUBU or ARGUS,
         or executing Direct Path First, returning real findings and evidence.
+        If 'steps' is provided, executes an ordered composite workflow.
         """
         _sync()
         actual_dry_run = bool(dry_run) if not hasattr(dry_run, "default") else False
@@ -171,7 +173,29 @@ def create_mcp_server():
         actual_task_type = str(task_type) if not hasattr(task_type, "default") else "ANALYZE"
         actual_files = [str(f) for f in files] if not hasattr(files, "default") else []
         actual_prompt = str(prompt) if not hasattr(prompt, "default") else ""
+        actual_steps = steps if (steps and not hasattr(steps, "default")) else None
 
+        # Composite workflow branch if steps provided
+        if actual_steps and isinstance(actual_steps, list):
+            wf_requests = []
+            for idx, s in enumerate(actual_steps, 1):
+                if isinstance(s, dict):
+                    s_params = dict(s.get("parameters", {}))
+                    if "dry_run" not in s_params:
+                        s_params["dry_run"] = actual_dry_run
+                    if "worker" in s and "worker" not in s_params:
+                        s_params["worker"] = s["worker"]
+                    s_req = WorkerRequest(
+                        task_id=str(s.get("task_id") or f"mcp-step-{idx}"),
+                        task_type=str(s.get("task_type", "ANALYZE")),
+                        prompt=str(s.get("prompt", actual_prompt)),
+                        files=list(s.get("files", [])),
+                        parameters=s_params
+                    )
+                    wf_requests.append(s_req)
+            if wf_requests:
+                resp = orch.execute_workflow(wf_requests)
+                return resp.to_dict()
 
         params: Dict[str, Any] = {"dry_run": actual_dry_run}
         if actual_action:

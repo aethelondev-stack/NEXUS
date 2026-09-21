@@ -358,3 +358,90 @@ class Orchestrator:
             summary=f"Task routed to {worker_name} under {hybrid_level.value} mode, but no active worker handler registered.",
             metrics={"classification": classification.value, "hybrid_level": hybrid_level.value, "duration": round(time.time() - start_time, 4)}
         )
+
+    # -----------------------------------------------------------------------
+    # Composite Multi-Worker Workflow Engine (Sequential & Fail-Fast)
+    # -----------------------------------------------------------------------
+    def execute_workflow(
+        self,
+        steps: List[WorkerRequest],
+        workflow_id: Optional[str] = None
+    ) -> WorkerResponse:
+        """
+        Executes an ordered sequence of WorkerRequest steps through the Orchestrator pipeline.
+        Each step is dispatched via self.execute_task(step), ensuring quota preflight,
+        worker policy checks, loop prevention, and evidence store persistence are enforced.
+        Aggregates findings and evidence across all steps into a composite WorkerResponse.
+        """
+        start_time = time.time()
+        wf_id = workflow_id or f"wf-{uuid.uuid4().hex[:8]}"
+
+        if not steps:
+            return WorkerResponse(
+                task_id=wf_id,
+                worker_name="composite",
+                status="failed",
+                summary="Workflow execution rejected: steps list is empty.",
+                error=WorkerError(
+                    error_code="EMPTY_WORKFLOW",
+                    message="At least one WorkerRequest step must be provided.",
+                    retryable=False
+                ),
+                metrics={"duration_seconds": round(time.time() - start_time, 4), "steps_executed": 0}
+            )
+
+        step_responses: Dict[str, Dict[str, Any]] = {}
+        aggregated_findings: List[str] = []
+        aggregated_evidence: List[Evidence] = []
+        workflow_status = "success"
+        failure_error: Optional[WorkerError] = None
+        failure_summary = ""
+
+        for idx, step in enumerate(steps, 1):
+            step_id = step.task_id or f"step_{idx}"
+            if not step.task_id:
+                step.task_id = f"{wf_id}-step_{idx}"
+
+            # Execute step through the standard pipeline
+            step_resp = self.execute_task(step)
+            step_responses[step_id] = step_resp.to_dict()
+
+            # Aggregate findings and evidence
+            if step_resp.findings:
+                aggregated_findings.extend(step_resp.findings)
+            if step_resp.evidence:
+                aggregated_evidence.extend(step_resp.evidence)
+
+            # Check for failure (Fail-Fast policy)
+            if step_resp.status != "success":
+                workflow_status = "failed"
+                failure_error = step_resp.error or WorkerError(
+                    error_code="STEP_FAILED",
+                    message=f"Workflow step '{step_id}' failed with status '{step_resp.status}'.",
+                    retryable=False
+                )
+                failure_summary = f"Workflow failed at step {idx}/{len(steps)} ('{step_id}'): {step_resp.summary}"
+                break
+
+        duration = round(time.time() - start_time, 4)
+        summary = (
+            f"Composite workflow completed successfully across {len(step_responses)}/{len(steps)} step(s)."
+            if workflow_status == "success"
+            else failure_summary
+        )
+
+        return WorkerResponse(
+            task_id=wf_id,
+            worker_name="composite",
+            status=workflow_status,
+            summary=summary,
+            findings=aggregated_findings,
+            evidence=aggregated_evidence,
+            error=failure_error,
+            metrics={
+                "duration_seconds": duration,
+                "steps_total": len(steps),
+                "steps_executed": len(step_responses),
+                "step_responses": step_responses
+            }
+        )
