@@ -8,6 +8,7 @@ Standard-library only dependencies with optional mcp runtime client.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import os
 import pathlib
@@ -90,6 +91,7 @@ class ArgusAdapter(BaseWorkerAdapter):
         # 3. Call via MCP Stdio Transport
         parsed_data: Optional[Dict[str, Any]] = None
         call_error: Optional[str] = None
+        mcp_transport_used = False
 
         if HAS_MCP and server_path and pathlib.Path(server_path).exists():
             async def _mcp_call() -> Dict[str, Any]:
@@ -110,9 +112,23 @@ class ArgusAdapter(BaseWorkerAdapter):
                                     return {"text": content.text}
                         return {"status": "success", "result": "completed"}
 
+            def _run_mcp_isolated() -> Dict[str, Any]:
+                return asyncio.run(asyncio.wait_for(_mcp_call(), timeout=timeout))
+
             try:
-                parsed_data = asyncio.run(asyncio.wait_for(_mcp_call(), timeout=timeout))
-            except asyncio.TimeoutError:
+                try:
+                    running_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    running_loop = None
+
+                if running_loop and running_loop.is_running():
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(_run_mcp_isolated)
+                        parsed_data = future.result(timeout=timeout + 2.0)
+                else:
+                    parsed_data = _run_mcp_isolated()
+                mcp_transport_used = True
+            except (asyncio.TimeoutError, concurrent.futures.TimeoutError):
                 return WorkerResponse(
                     task_id=task_id,
                     worker_name=self.definition.worker_id,
@@ -174,7 +190,14 @@ class ArgusAdapter(BaseWorkerAdapter):
             status="success",
             summary=f"ARGUS executed tool '{tool_name}' successfully via MCP transport (Zero Cloud Token Cost).",
             findings=findings,
-            metrics={"duration_seconds": duration, "action": action, "tool": tool_name, "token_cost": 0}
+            metrics={
+                "duration_seconds": duration,
+                "action": action,
+                "tool": tool_name,
+                "transport": "mcp" if mcp_transport_used else "fallback",
+                "desktop_items_count": parsed_data.get("desktop_items_count", len(findings)),
+                "token_cost": 0
+            }
         )
 
     @staticmethod

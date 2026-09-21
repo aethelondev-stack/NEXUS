@@ -162,6 +162,11 @@ class Orchestrator:
 
         return False, "No loop detected."
 
+    def reset_history(self) -> None:
+        """Resets action loop history and fingerprints between independent tasks."""
+        self._action_history.clear()
+        self._fingerprint_counts.clear()
+
     # -----------------------------------------------------------------------
     # Core Pipeline: PLAN -> EXECUTE -> OBSERVE -> VERIFY -> DONE
     # -----------------------------------------------------------------------

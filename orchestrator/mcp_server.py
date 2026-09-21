@@ -141,7 +141,15 @@ def create_mcp_server():
             import orchestrator.adapters.bubu_adapter as bubu_mod
             importlib.reload(argus_mod)
             importlib.reload(bubu_mod)
-            orch._init_adapters()
+            bubu_def = reg.get_worker("bubu")
+            if bubu_def:
+                b_adapter = bubu_mod.BubuAdapter(bubu_def, orch.project_root, pm)
+                orch.register_worker("bubu", b_adapter.invoke)
+                orch.register_worker("ai-studio-worker", b_adapter.invoke)
+            argus_def = reg.get_worker("argus")
+            if argus_def:
+                a_adapter = argus_mod.ArgusAdapter(argus_def, orch.project_root, pm)
+                orch.register_worker("argus", a_adapter.invoke)
         except Exception:
             pass
 
@@ -156,6 +164,7 @@ def create_mcp_server():
             files=actual_files,
             parameters=params
         )
+        orch.reset_history()
         resp = orch.execute_task(req)
         return resp.to_dict()
 
