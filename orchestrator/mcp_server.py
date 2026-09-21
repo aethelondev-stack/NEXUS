@@ -14,8 +14,11 @@ import uuid
 from typing import Any, Dict, List, Optional
 from pydantic import Field
 
-# Ensure ORCHESTRATOR root is on sys.path
+# Ensure ORCHESTRATOR root is on sys.path and remove script_dir if it shadows the package
 CURRENT_DIR = pathlib.Path(__file__).resolve().parent.parent
+script_dir = str(pathlib.Path(__file__).resolve().parent)
+if sys.path and sys.path[0] == script_dir:
+    sys.path.pop(0)
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
@@ -124,15 +127,22 @@ def create_mcp_server():
         Executes task through the Orchestrator pipeline, routing to BUBU or ARGUS,
         or executing Direct Path First, returning real findings and evidence.
         """
-        params: Dict[str, Any] = {"dry_run": dry_run}
-        if action:
-            params["action"] = action
+        # Clean parameter values from FieldInfo if directly invoked
+        actual_dry_run = bool(dry_run) if not hasattr(dry_run, "default") else False
+        actual_action = str(action) if (action and not hasattr(action, "default")) else None
+        actual_task_type = str(task_type) if not hasattr(task_type, "default") else "ANALYZE"
+        actual_files = [str(f) for f in files] if not hasattr(files, "default") else []
+        actual_prompt = str(prompt) if not hasattr(prompt, "default") else ""
+
+        params: Dict[str, Any] = {"dry_run": actual_dry_run}
+        if actual_action:
+            params["action"] = actual_action
 
         req = WorkerRequest(
             task_id=f"mcp-{uuid.uuid4().hex[:8]}",
-            task_type=task_type,
-            prompt=prompt,
-            files=files,
+            task_type=actual_task_type,
+            prompt=actual_prompt,
+            files=actual_files,
             parameters=params
         )
         resp = orch.execute_task(req)

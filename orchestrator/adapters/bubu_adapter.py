@@ -11,6 +11,7 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -67,7 +68,7 @@ class BubuAdapter(BaseWorkerAdapter):
                 )
 
         # 3. Assemble subprocess command
-        python_exe = self.definition.python_executable or "python"
+        python_exe = sys.executable or self.definition.python_executable or "python"
         cmd = [python_exe, str(self.definition.entrypoint)]
 
         # Map task type
@@ -94,6 +95,7 @@ class BubuAdapter(BaseWorkerAdapter):
             cwd = str(self.project_root) if self.project_root.exists() else None
             result = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 cwd=cwd,

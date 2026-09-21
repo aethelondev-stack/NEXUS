@@ -10,6 +10,7 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -53,7 +54,7 @@ class ArgusAdapter(BaseWorkerAdapter):
 
         # 2. Determine action (desktop-items, scan, or status)
         action = request.parameters.get("action", "desktop_items")
-        python_exe = self.definition.python_executable or "python"
+        python_exe = sys.executable or self.definition.python_executable or "python"
 
         # If we have the server.py path, we can run a short python runner that calls the function
         # or use argus.py if available
@@ -92,6 +93,7 @@ class ArgusAdapter(BaseWorkerAdapter):
         try:
             result = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 timeout=self.definition.timeout_seconds
