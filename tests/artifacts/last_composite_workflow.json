@@ -1,6 +1,6 @@
 {
-  "workflow_id": "wf-exp-20260922141129-b732eb",
-  "timestamp": "2026-09-22T14:12:21.759942+00:00",
+  "workflow_id": "wf-exp-20260922153600-5f734f",
+  "timestamp": "2026-09-22T15:36:37.942837+00:00",
   "orchestrator_version": "3.0.0",
   "execution_mode": "composite_workflow_sequential",
   "environment": {
@@ -10,48 +10,32 @@
     "bubu_transport": "cli"
   },
   "fixture": {
-    "name": "composite_fixture_1f8006.py",
-    "sha256": "71f851717402942b918848017f37e740d4f2d2e066b7170b97c8f8f1173d22ec",
-    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_1f8006.txt"
+    "name": "composite_fixture_c53643.py",
+    "sha256": "9ff46f05a1e2c0f65f75b700b323bad66bf7895c06c1582229c5a8d9c988f936",
+    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_c53643.txt"
   },
   "workflow_response": {
     "worker_name": "composite",
     "status": "success",
-    "duration_seconds": 52.721,
+    "duration_seconds": 37.601,
     "steps_total": 2,
     "steps_executed": 2,
-    "aggregated_findings_count": 18,
-    "aggregated_evidence_count": 4,
+    "aggregated_findings_count": 15,
+    "aggregated_evidence_count": 1,
     "findings_sample": [
-      "Arbitrary code execution vulnerability due to the use of eval() on untrusted payload data.",
-      "Hardcoded sensitive secret token present in the source code.",
-      "Potential ZeroDivisionError caused by unchecked division using payload values.",
-      "Desktop Item: 0_COMPOSITE_WORKFLOW_MARKER_1f8006.txt",
-      "Desktop Item: .ai-worker"
+      "Desktop Item: 0_COMPOSITE_WORKFLOW_MARKER_c53643.txt",
+      "Desktop Item: .ai-worker",
+      "Desktop Item: 1.html",
+      "Desktop Item: 1921622819726675969.jpg",
+      "Desktop Item: 2.html"
     ],
     "evidence_sample": [
       {
         "source": "bubu",
-        "file": "composite_fixture_1f8006.py",
-        "line_start": 10,
-        "line_end": 10,
-        "finding": "Arbitrary code execution vulnerability via eval()",
-        "confidence": 1.0
-      },
-      {
-        "source": "bubu",
-        "file": "composite_fixture_1f8006.py",
-        "line_start": 13,
-        "line_end": 13,
-        "finding": "Hardcoded sensitive demo token",
-        "confidence": 1.0
-      },
-      {
-        "source": "bubu",
-        "file": "composite_fixture_1f8006.py",
-        "line_start": 16,
+        "file": "composite_fixture_c53643.py",
+        "line_start": 1,
         "line_end": 16,
-        "finding": "Unchecked division by zero vulnerability",
+        "finding": "Inspected file composite_fixture_c53643.py",
         "confidence": 1.0
       }
     ]
@@ -61,8 +45,8 @@
       "task_id": "step_bubu_audit",
       "worker_name": "bubu",
       "status": "success",
-      "findings_count": 3,
-      "evidence_count": 4
+      "findings_count": 0,
+      "evidence_count": 1
     },
     "step_2_argus": {
       "task_id": "step_argus_desktop",

@@ -1,0 +1,57 @@
+{
+  "test": "ORCHESTRATOR V3: Real Composite Multi-Worker Workflow Integration Proof",
+  "status": "PASS",
+  "timestamp": "2026-09-22T15:36:37.942837+00:00",
+  "workflow_id": "wf-exp-20260922153600-5f734f",
+  "orchestrator_version": "3.0.0",
+  "execution_mode": "composite_workflow_sequential",
+  "environment": {
+    "os": "Windows 11",
+    "gemini_api_configured": true,
+    "argus_transport": "mcp",
+    "bubu_transport": "cli"
+  },
+  "workers": [
+    "NEXUS",
+    "BUBU",
+    "ARGUS"
+  ],
+  "fixture": {
+    "name": "composite_fixture_c53643.py",
+    "sha256": "9ff46f05a1e2c0f65f75b700b323bad66bf7895c06c1582229c5a8d9c988f936",
+    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_c53643.txt"
+  },
+  "bubu": {
+    "status": "success",
+    "task_id": "step_bubu_audit",
+    "transport": "cli",
+    "findings_count": 0,
+    "evidence_count": 1,
+    "evidence_sample": [
+      {
+        "source": "bubu",
+        "file": "composite_fixture_c53643.py",
+        "line_start": 1,
+        "line_end": 16,
+        "finding": "Inspected file composite_fixture_c53643.py",
+        "confidence": 1.0
+      }
+    ]
+  },
+  "argus": {
+    "status": "success",
+    "task_id": "step_argus_desktop",
+    "transport": "mcp",
+    "desktop_items_count": 47,
+    "target_marker_found": true
+  },
+  "composite": {
+    "worker_name": "composite",
+    "status": "success",
+    "duration_seconds": 37.601,
+    "steps_total": 2,
+    "steps_executed": 2,
+    "aggregated_findings_count": 15,
+    "aggregated_evidence_count": 1
+  }
+}
