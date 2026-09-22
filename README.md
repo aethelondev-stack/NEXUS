@@ -223,18 +223,26 @@ Environment: `{"PYTHONPATH": "<path-to-NEXUS>"}`
 
 ## Setup & User Preference Experience
 
-NEXUS enforces a non-intrusive, user-first operational contract:
+NEXUS enforces a non-intrusive, user-first operational contract based on clear architectural separation:
 
-### 1. When User Expresses an Explicit Preference
-- **BUBU Options:** `auto` (Recommended hybrid), `enabled` (Always active), `disabled` (Turned off).
-- **ARGUS Options:** `auto` (Recommended hybrid), `local` (GPU Florence-2 only), `direct` (Turned off).
-- If a worker is configured as `disabled` or `direct`:
-  - Automatic routing gracefully falls back to `DIRECT_FALLBACK` (delegated to the lead agent with 0 token overhead).
-  - Explicit dispatch (`worker="bubu"`) halts with `WORKER_NOT_AVAILABLE` without launching worker subprocesses.
+### 1. Architectural Model: Host Coordinator vs. Leaf Workers
+* **NEXUS (Always-On Host Coordinator):** NEXUS is the central orchestration and routing backbone. It is not an optional worker that can be disabled—it is always active to classify tasks, manage quotas, break infinite loops, and aggregate evidence.
+* **BUBU & ARGUS (Specialized Workers):** User preferences specifically govern the activation and execution modes of the leaf workers:
+  * **BUBU:** `auto` (Recommended smart hybrid) | `enabled` (Always active) | `disabled` (Turned off).
+  * **ARGUS:** `auto` (Recommended smart hybrid) | `local` (GPU Florence-2 only) | `direct` (Turned off).
 
-### 2. When User Has Not Configured Preferences (First Interaction)
-- **Non-Blocking Rule:** The agent **always executes the user's coding or analytical task first**.
-- Only after the user's task is fully resolved, a non-blocking notification note is presented at the end of the message. The system never halts or interrogates the user prior to task completion.
+### 2. One-Time Session Preference Onboarding Protocol
+Every new conversation starts with an isolated session lifecycle (`UNRESOLVED` -> `WAITING_FOR_REPLY` -> `RESOLVED`):
+1. **Turn 1 (First Message):** The lead agent **always fulfills the user's task first**. If no explicit worker preference was provided in the prompt, a one-time onboarding banner is appended to the response:
+   - **Option 1 (Hepsi AUTO):** `BUBU = auto`, `ARGUS = auto` (NEXUS routes dynamically: simple edits -> Direct Path, audits -> BUBU, visual -> ARGUS).
+   - **Option 2 (Hepsi KAPALI):** `BUBU = disabled`, `ARGUS = disabled` (NEXUS bypasses workers entirely; all tasks route to Lead Agent with zero worker overhead).
+   - **Option 3 (Özel Seçim):** Custom combinations (e.g. `BUBU disabled, ARGUS local`).
+   - **Option 4 (Default / No Reply):** If the user ignores the banner and sends a new task, **Option 1 (All AUTO)** is automatically resolved.
+2. **Turn 2+ (Subsequent Messages):** Once resolved, the session is locked. **The onboarding banner is never displayed again** (guaranteed `onboarding_shown_count = 1`).
+3. **Session Isolation:** Preferences are strictly session-scoped (`Session A != Session B`) via `ANTIGRAVITY_CONVERSATION_ID`. No configuration files (`.ai-worker/`, `.argus/`) are ever written to project workspaces.
+4. **Fallback Mechanics:** If a worker is configured as `disabled`:
+   - Automatic routing falls back to `DIRECT_FALLBACK` (delegated to Lead Agent).
+   - Explicit dispatch (`worker="bubu"`) halts safely with `WORKER_NOT_AVAILABLE` without launching subprocesses.
 
 ---
 

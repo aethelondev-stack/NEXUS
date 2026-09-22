@@ -1,6 +1,6 @@
 {
-  "workflow_id": "wf-exp-20260921235155-ee6b7b",
-  "timestamp": "2026-09-21T23:51:59.953496+00:00",
+  "workflow_id": "wf-exp-20260922141129-b732eb",
+  "timestamp": "2026-09-22T14:12:21.759942+00:00",
   "orchestrator_version": "3.0.0",
   "execution_mode": "composite_workflow_sequential",
   "environment": {
@@ -10,48 +10,48 @@
     "bubu_transport": "cli"
   },
   "fixture": {
-    "name": "composite_fixture_b87ada.py",
-    "sha256": "c66ee8f3a96ffee5dc41187b43a80a4d066951d74b16f978812f337f9c6eb97b",
-    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_b87ada.txt"
+    "name": "composite_fixture_1f8006.py",
+    "sha256": "71f851717402942b918848017f37e740d4f2d2e066b7170b97c8f8f1173d22ec",
+    "desktop_marker": "0_COMPOSITE_WORKFLOW_MARKER_1f8006.txt"
   },
   "workflow_response": {
     "worker_name": "composite",
     "status": "success",
-    "duration_seconds": 4.601,
+    "duration_seconds": 52.721,
     "steps_total": 2,
     "steps_executed": 2,
     "aggregated_findings_count": 18,
     "aggregated_evidence_count": 4,
     "findings_sample": [
-      "Arbitrary code execution via Python eval() function on untrusted payload input.",
-      "Hardcoded sensitive demo token stored in plaintext within the source code.",
-      "Unchecked division by zero flaw when payload factor defaults to zero.",
-      "Desktop Item: 0_COMPOSITE_WORKFLOW_MARKER_b87ada.txt",
+      "Arbitrary code execution vulnerability due to the use of eval() on untrusted payload data.",
+      "Hardcoded sensitive secret token present in the source code.",
+      "Potential ZeroDivisionError caused by unchecked division using payload values.",
+      "Desktop Item: 0_COMPOSITE_WORKFLOW_MARKER_1f8006.txt",
       "Desktop Item: .ai-worker"
     ],
     "evidence_sample": [
       {
         "source": "bubu",
-        "file": "composite_fixture_b87ada.py",
+        "file": "composite_fixture_1f8006.py",
         "line_start": 10,
         "line_end": 10,
-        "finding": "Arbitrary code execution using eval() on payload expression",
+        "finding": "Arbitrary code execution vulnerability via eval()",
         "confidence": 1.0
       },
       {
         "source": "bubu",
-        "file": "composite_fixture_b87ada.py",
+        "file": "composite_fixture_1f8006.py",
         "line_start": 13,
         "line_end": 13,
-        "finding": "Hardcoded secret token stored in plaintext",
+        "finding": "Hardcoded sensitive demo token",
         "confidence": 1.0
       },
       {
         "source": "bubu",
-        "file": "composite_fixture_b87ada.py",
+        "file": "composite_fixture_1f8006.py",
         "line_start": 16,
         "line_end": 16,
-        "finding": "Division by zero vulnerability on payload factor",
+        "finding": "Unchecked division by zero vulnerability",
         "confidence": 1.0
       }
     ]
@@ -69,7 +69,7 @@
       "worker_name": "argus",
       "status": "success",
       "transport": "mcp",
-      "desktop_items_count": 46,
+      "desktop_items_count": 47,
       "target_marker_found": true
     }
   },

@@ -29,6 +29,7 @@ from orchestrator.provider_manager import HybridModeLevel, ProviderManager, Prov
 from orchestrator.worker_registry import WorkerRegistry, WorkerDefinition
 from orchestrator.adapters.bubu_adapter import BubuAdapter
 from orchestrator.adapters.argus_adapter import ArgusAdapter
+from orchestrator.session_state import SessionStateManager
 
 
 class TaskClassification(enum.Enum):
@@ -62,6 +63,7 @@ class Orchestrator:
         project_root: Optional[pathlib.Path] = None,
         provider_manager: Optional[ProviderManager] = None,
         registry: Optional[WorkerRegistry] = None,
+        session_state: Optional[SessionStateManager] = None,
         max_retries: int = 3,
         max_replans: int = 2,
         max_wall_time_seconds: float = 60.0,
@@ -71,6 +73,7 @@ class Orchestrator:
         self.provider_manager = provider_manager or ProviderManager()
         self.evidence_store = EvidenceStore(project_root=self.project_root)
         self.registry = registry or WorkerRegistry()
+        self.session_state = session_state or SessionStateManager()
         self.max_retries = max_retries
         self.max_replans = max_replans
         self.max_wall_time_seconds = max_wall_time_seconds
@@ -174,6 +177,12 @@ class Orchestrator:
         Workspace policy: Checks project-level config if present in project_root or target_dir.
         """
         norm_id = "bubu" if worker_name in ("bubu", "ai-studio-worker") else worker_name
+
+        # 0. Session-level preference check (Current chat / session override)
+        if getattr(self, "session_state", None):
+            session_enabled = self.session_state.is_worker_enabled(norm_id)
+            if session_enabled is False:
+                return False
 
         # 1. Authoritative global registry check
         if not self.registry.is_worker_enabled(norm_id):

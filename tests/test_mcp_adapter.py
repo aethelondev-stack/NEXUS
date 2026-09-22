@@ -12,7 +12,7 @@ class TestMCPServer(unittest.TestCase):
         self.server = create_mcp_server()
 
     def test_mcp_server_tools_registered(self):
-        self.assertEqual(self.server.name, "Antigravity Orchestrator Server")
+        self.assertEqual(self.server.name, "NEXUS Host Coordinator")
 
     def test_mcp_tool_execution(self):
         # We can extract the underlying functions from FastMCP tools

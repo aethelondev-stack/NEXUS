@@ -37,7 +37,7 @@ def create_mcp_server():
     if FastMCP is None:
         raise ImportError("FastMCP is not installed. Install with 'pip install fastmcp'.")
 
-    mcp = FastMCP("Antigravity Orchestrator Server")
+    mcp = FastMCP("NEXUS Host Coordinator")
 
     pm = ProviderManager()
     reg = WorkerRegistry()
@@ -78,6 +78,9 @@ def create_mcp_server():
         summary = pm.get_status_summary()
         summary["registry_path"] = str(reg.registry_path)
         summary["registered_workers_count"] = len(reg.list_workers())
+        if getattr(orch, "session_state", None):
+            summary["session_preferences"] = orch.session_state.get_preferences()
+            summary["session_state"] = orch.session_state.state.value
         return summary
 
     @mcp.tool()
@@ -246,6 +249,48 @@ def create_mcp_server():
             "verification_status": status.value,
             "is_valid": status.value == "VERIFIED"
         }
+
+    @mcp.tool()
+    def orchestrator_get_session_preference() -> Dict[str, Any]:
+        """
+        Returns active session-level worker preferences and onboarding lifecycle state.
+        """
+        _sync()
+        if getattr(orch, "session_state", None):
+            return {
+                "session_id": orch.session_state.session_id,
+                "state": orch.session_state.state.value,
+                "resolved": orch.session_state.resolved,
+                "onboarding_shown_count": orch.session_state.onboarding_shown_count,
+                "preferences": orch.session_state.get_preferences()
+            }
+        return {"error": "No session_state initialized"}
+
+    @mcp.tool()
+    def orchestrator_set_session_preference(
+        bubu: Optional[str] = Field(default=None, description="Mode for BUBU (auto, enabled, disabled)"),
+        argus: Optional[str] = Field(default=None, description="Mode for ARGUS (auto, local, direct, disabled, enabled)"),
+        nexus: Optional[str] = Field(default=None, description="Deprecated: NEXUS is the always-on host coordinator")
+    ) -> Dict[str, Any]:
+        """
+        Sets explicit session-level worker preferences for BUBU and ARGUS without touching workspace files.
+        NEXUS is the always-on host coordinator.
+        """
+        _sync()
+        if getattr(orch, "session_state", None):
+            updates = {}
+            if bubu:
+                updates["bubu"] = bubu.lower()
+            if argus:
+                updates["argus"] = argus.lower()
+            orch.session_state.set_explicit_preference(updates)
+            return {
+                "status": "success",
+                "session_id": orch.session_state.session_id,
+                "state": orch.session_state.state.value,
+                "preferences": orch.session_state.get_preferences()
+            }
+        return {"error": "No session_state initialized"}
 
     return mcp
 
